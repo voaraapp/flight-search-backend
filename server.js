@@ -17,6 +17,33 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Flight search backend is running!' });
 });
 
+// Helper function to get entityId for an airport code
+async function getEntityId(airportCode, apiKey) {
+  const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${airportCode}&locale=en-US`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
+      'x-rapidapi-key': apiKey
+    }
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok || !data.status || !data.data || data.data.length === 0) {
+    throw new Error(`Could not find airport: ${airportCode}`);
+  }
+
+  // Return the first matching airport's details
+  const airport = data.data[0];
+  return {
+    skyId: airport.skyId,
+    entityId: airport.entityId,
+    name: airport.presentation.title
+  };
+}
+
 // Search flights endpoint
 app.get('/api/search-flights', async (req, res) => {
   try {
@@ -51,14 +78,24 @@ app.get('/api/search-flights', async (req, res) => {
       });
     }
 
-    // Build the API URL
-    // Note: Using airport codes for both skyId and entityId as a starting point
-    // We may need to add an airport lookup endpoint later for proper entityIds
-    const url = `https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights?originSkyId=${from}&destinationSkyId=${to}&originEntityId=${from}&destinationEntityId=${to}&date=${date}${returnDate ? `&returnDate=${returnDate}` : ''}&cabinClass=${cabinClass}&adults=${adults}&sortBy=best&currency=${currency}&market=${market}&countryCode=${countryCode}`;
+    console.log(`Searching flights: ${from} -> ${to} on ${date}`);
 
-    console.log('Calling API:', url);
+    // Step 1: Look up entityIds for both airports
+    console.log('Looking up airport entityIds...');
+    const [fromAirport, toAirport] = await Promise.all([
+      getEntityId(from, apiKey),
+      getEntityId(to, apiKey)
+    ]);
 
-    // Make the API request
+    console.log(`From: ${fromAirport.name} (${fromAirport.skyId}, entityId: ${fromAirport.entityId})`);
+    console.log(`To: ${toAirport.name} (${toAirport.skyId}, entityId: ${toAirport.entityId})`);
+
+    // Step 2: Build the flight search URL with correct entityIds
+    const url = `https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights?originSkyId=${fromAirport.skyId}&destinationSkyId=${toAirport.skyId}&originEntityId=${fromAirport.entityId}&destinationEntityId=${toAirport.entityId}&date=${date}${returnDate ? `&returnDate=${returnDate}` : ''}&cabinClass=${cabinClass}&adults=${adults}&sortBy=best&currency=${currency}&market=${market}&countryCode=${countryCode}`;
+
+    console.log('Searching flights...');
+
+    // Step 3: Make the API request
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -79,10 +116,16 @@ app.get('/api/search-flights', async (req, res) => {
       });
     }
 
+    console.log(`Success! Found ${data.data?.itineraries?.length || 0} flights`);
+
     // Return the flight data
     res.json({
       success: true,
-      data: data
+      data: data,
+      airports: {
+        from: fromAirport,
+        to: toAirport
+      }
     });
 
   } catch (error) {
@@ -113,7 +156,7 @@ app.get('/api/search-location', async (req, res) => {
       });
     }
 
-    const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(query)}`;
+    const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(query)}&locale=en-US`;
 
     const response = await fetch(url, {
       method: 'GET',
