@@ -523,36 +523,60 @@
             let html = `<h2>✈️ Found ${flights.length} Flights</h2>`;
             
             flights.forEach((flight, index) => {
-                const price = flight.price?.formatted || 'N/A';
-                const legs = flight.legs || [];
+                // Extract price
+                const price = flight.price?.amount ? `£${flight.price.amount}` : 'N/A';
                 
-                if (legs.length === 0) return;
+                // Extract sector segments (legs)
+                const segments = flight.sector?.sectorSegments || [];
                 
-                const firstLeg = legs[0];
-                const lastLeg = legs[legs.length - 1];
+                if (segments.length === 0) {
+                    console.warn('No segments found for flight:', flight);
+                    return;
+                }
                 
-                const origin = firstLeg.origin?.name || firstLeg.origin?.displayCode || 'N/A';
-                const destination = lastLeg.destination?.name || lastLeg.destination?.displayCode || 'N/A';
-                const departure = new Date(firstLeg.departure).toLocaleString('en-GB', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                const arrival = new Date(lastLeg.arrival).toLocaleString('en-GB', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                // Get first and last segment
+                const firstSegment = segments[0];
+                const lastSegment = segments[segments.length - 1];
                 
-                const stops = firstLeg.stopCount || 0;
-                const carriers = firstLeg.carriers?.marketing?.map(c => c.name).join(', ') || 'Various';
-                const duration = firstLeg.durationInMinutes ? `${Math.floor(firstLeg.durationInMinutes / 60)}h ${firstLeg.durationInMinutes % 60}m` : 'N/A';
+                // Extract origin/destination
+                const origin = firstSegment.origin?.city || firstSegment.origin?.name || 'N/A';
+                const destination = lastSegment.destination?.city || lastSegment.destination?.name || 'N/A';
                 
-                const deepLink = flight.pricing_options?.[0]?.items?.[0]?.deepLink || '';
+                // Extract times
+                const departure = firstSegment.departure?.localTime 
+                    ? new Date(firstSegment.departure.localTime).toLocaleString('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : 'N/A';
+                    
+                const arrival = lastSegment.arrival?.localTime
+                    ? new Date(lastSegment.arrival.localTime).toLocaleString('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : 'N/A';
+                
+                // Calculate stops (number of segments - 1)
+                const stops = segments.length - 1;
+                
+                // Get carriers
+                const carriers = [...new Set(segments.map(s => s.carrier?.name).filter(Boolean))].join(', ') || 'Various';
+                
+                // Calculate duration
+                const durationSeconds = flight.duration || 0;
+                const hours = Math.floor(durationSeconds / 3600);
+                const minutes = Math.floor((durationSeconds % 3600) / 60);
+                const duration = `${hours}h ${minutes}m`;
+                
+                // Get booking link
+                const bookingLink = flight.bookingOptions?.edges?.[0]?.url || '';
                 
                 html += `
                     <div class="flight-card">
@@ -582,7 +606,7 @@
                                 <span class="detail-value">${carriers}</span>
                             </div>
                         </div>
-                        ${deepLink ? `<a href="${deepLink}" target="_blank" class="book-button">Book Now →</a>` : ''}
+                        ${bookingLink ? `<a href="${bookingLink}" target="_blank" class="book-button">Book Now →</a>` : ''}
                     </div>
                 `;
             });
