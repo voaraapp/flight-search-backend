@@ -5,117 +5,37 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all origins (allows your frontend to call this backend)
+// Request counter (resets when server restarts)
+let requestCount = 0;
+
+// Enable CORS for all origins
 app.use(cors());
 app.use(express.json());
 
-// Serve the HTML page at the root
+// Serve the HTML page
 app.use(express.static('public'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Flight search backend is running (Kiwi.com API)!' });
+  res.json({ 
+    status: 'OK', 
+    message: 'Flight search backend is running!',
+    apiRequestCount: requestCount,
+    apiLimit: 150
+  });
 });
 
-// Search flights endpoint using Kiwi.com API
-app.get('/api/search-flights', async (req, res) => {
-  try {
-    // Get parameters from query string
-    const {
-      from,
-      to,
-      date,
-      returnDate,
-      adults = '1',
-      currency = 'GBP'
-    } = req.query;
-
-    // Validate required parameters
-    if (!from || !to || !date) {
-      return res.status(400).json({
-        error: 'Missing required parameters',
-        required: ['from', 'to', 'date']
-      });
-    }
-
-    // Get API key from environment variable (defaults to "picky" test key)
-    const apiKey = process.env.KIWI_API_KEY || 'picky';
-    
-    console.log(`Searching flights: ${from} -> ${to} on ${date}`);
-    console.log(`Using API key: ${apiKey === 'picky' ? 'picky (test key)' : 'custom key'}`);
-
-    // Format date for Kiwi API (they want DD/MM/YYYY)
-    const formatDate = (dateStr) => {
-      const d = new Date(dateStr);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
-
-    // Build the Kiwi.com API URL
-    const baseUrl = 'https://api.tequila.kiwi.com/v2/search';
-    const params = new URLSearchParams({
-      fly_from: from,
-      fly_to: to,
-      date_from: formatDate(date),
-      date_to: formatDate(date),
-      adults: adults,
-      curr: currency,
-      limit: 20, // Get top 20 results
-      sort: 'price'
-    });
-
-    // Add return date if provided
-    if (returnDate) {
-      params.append('return_from', formatDate(returnDate));
-      params.append('return_to', formatDate(returnDate));
-    }
-
-    const url = `${baseUrl}?${params}`;
-    console.log('Calling Kiwi API...');
-
-    // Make the API request
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'apikey': apiKey
-      }
-    });
-
-    const data = await response.json();
-
-    // Check if API returned an error
-    if (!response.ok) {
-      console.error('API Error:', response.status, data);
-      return res.status(response.status).json({
-        error: 'API request failed',
-        details: data,
-        status: response.status,
-        message: response.status === 401 ? 'API key invalid or expired' : data.message || 'Unknown error'
-      });
-    }
-
-    console.log(`Success! Found ${data.data?.length || 0} flights`);
-
-    // Return the flight data
-    res.json({
-      success: true,
-      data: data,
-      resultCount: data.data?.length || 0
-    });
-
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
-  }
+// Get request count
+app.get('/api/request-count', (req, res) => {
+  res.json({
+    count: requestCount,
+    limit: 150,
+    remaining: 150 - requestCount
+  });
 });
 
-// Search for airport/city codes
-app.get('/api/search-location', async (req, res) => {
+// Airport autocomplete endpoint
+app.get('/api/autocomplete', async (req, res) => {
   try {
     const { query } = req.query;
     
@@ -125,20 +45,31 @@ app.get('/api/search-location', async (req, res) => {
       });
     }
 
-    const apiKey = process.env.KIWI_API_KEY || 'picky';
+    const apiKey = process.env.RAPIDAPI_KEY;
+    
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'API key not configured',
+        message: 'Please set RAPIDAPI_KEY environment variable in Render'
+      });
+    }
 
-    const url = `https://api.tequila.kiwi.com/locations/query?term=${encodeURIComponent(query)}&locale=en-US&location_types=airport&limit=10`;
+    const url = `https://flights-scraper-real-time.p.rapidapi.com/flights/auto-complete?query=${encodeURIComponent(query)}`;
+
+    console.log(`[${++requestCount}/150] Autocomplete: ${query}`);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'apikey': apiKey
+        'x-rapidapi-host': 'flights-scraper-real-time.p.rapidapi.com',
+        'x-rapidapi-key': apiKey
       }
     });
 
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('API Error:', data);
       return res.status(response.status).json({
         error: 'API request failed',
         details: data
@@ -159,9 +90,121 @@ app.get('/api/search-location', async (req, res) => {
   }
 });
 
+// Search flights endpoint
+app.get('/api/search-flights', async (req, res) => {
+  try {
+    const {
+      from,
+      to,
+      departureDate,
+      returnDate,
+      tripType = 'return',
+      adults = '1',
+      children = '0',
+      infants = '0',
+      stops = '2',
+      cabinClass = 'ECONOMY',
+      currency = 'GBP',
+      market = 'GB',
+      locale = 'en-GB',
+      sort = 'PRICE'
+    } = req.query;
+
+    // Validate required parameters
+    if (!from || !to || !departureDate) {
+      return res.status(400).json({
+        error: 'Missing required parameters',
+        required: ['from', 'to', 'departureDate']
+      });
+    }
+
+    const apiKey = process.env.RAPIDAPI_KEY;
+    
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'API key not configured'
+      });
+    }
+
+    // Choose endpoint based on trip type
+    const endpoint = tripType === 'oneway' 
+      ? '/flights/search-oneway'
+      : '/flights/search-return';
+
+    // Build query parameters
+    const params = new URLSearchParams({
+      originSkyId: from,
+      destinationSkyId: to,
+      departureDate: departureDate,
+      adults: adults,
+      children: children,
+      infants: infants,
+      stops: stops,
+      cabinClass: cabinClass,
+      currency: currency,
+      market: market,
+      locale: locale,
+      sort: sort,
+      limit: '20',
+      allowReturnFromDifferentStationOrAirport: 'true',
+      allowReturnToDifferentStationOrAirport: 'true'
+    });
+
+    // Add return date if it's a return trip
+    if (tripType === 'return' && returnDate) {
+      params.append('returnDate', returnDate);
+    }
+
+    const url = `https://flights-scraper-real-time.p.rapidapi.com${endpoint}?${params}`;
+
+    console.log(`[${++requestCount}/150] Search: ${from} -> ${to} (${departureDate}${returnDate ? ' - ' + returnDate : ''})`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': 'flights-scraper-real-time.p.rapidapi.com',
+        'x-rapidapi-key': apiKey
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('API Error:', data);
+      return res.status(response.status).json({
+        error: 'API request failed',
+        details: data,
+        status: response.status
+      });
+    }
+
+    // Count results
+    const resultCount = data.data?.itineraries?.length || 0;
+    console.log(`✅ Found ${resultCount} flights (Request ${requestCount}/150)`);
+
+    res.json({
+      success: true,
+      data: data,
+      meta: {
+        requestCount: requestCount,
+        requestLimit: 150,
+        requestsRemaining: 150 - requestCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`✈️  Flight Search Backend running on port ${PORT}`);
-  console.log(`🔧 Using Kiwi.com API`);
-  console.log(`🔑 API Key: ${process.env.KIWI_API_KEY ? 'Custom key configured' : 'Using "picky" test key'}`);
+  console.log(`🔧 Using Flights Scraper Real-Time API`);
+  console.log(`🔑 API Key configured: ${process.env.RAPIDAPI_KEY ? 'Yes' : 'No'}`);
+  console.log(`📊 Request counter initialized at: ${requestCount}/150`);
 });
