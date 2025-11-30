@@ -524,17 +524,26 @@
             
             flights.forEach((flight, index) => {
                 // Extract price
-                const price = flight.price?.amount ? `£${flight.price.amount}` : 'N/A';
+                const price = flight.price?.amount ? `£${Math.round(parseFloat(flight.price.amount))}` : 'N/A';
                 
-                // Extract sector segments (legs)
-                const segments = flight.sector?.sectorSegments || [];
+                // Handle both one-way and return flights
+                // One-way flights have 'sector', return flights have 'outbound' and 'inbound'
+                const isReturn = flight.__typename === 'ItineraryReturn';
+                
+                let segments, returnSegments;
+                if (isReturn) {
+                    segments = flight.outbound?.sectorSegments || [];
+                    returnSegments = flight.inbound?.sectorSegments || [];
+                } else {
+                    segments = flight.sector?.sectorSegments || [];
+                }
                 
                 if (segments.length === 0) {
                     console.warn('No segments found for flight:', flight);
                     return;
                 }
                 
-                // Get first and last segment
+                // Get first and last segment of outbound
                 const firstSegment = segments[0]?.segment;
                 const lastSegment = segments[segments.length - 1]?.segment;
                 
@@ -575,10 +584,61 @@
                 const carriers = [...new Set(segments.map(s => s.segment?.carrier?.name).filter(Boolean))].join(', ') || 'Various';
                 
                 // Calculate duration
-                const durationSeconds = flight.duration || 0;
+                const durationSeconds = isReturn ? flight.outbound?.duration : flight.duration || 0;
                 const hours = Math.floor(durationSeconds / 3600);
                 const minutes = Math.floor((durationSeconds % 3600) / 60);
                 const duration = `${hours}h ${minutes}m`;
+                
+                // Return flight info (if applicable)
+                let returnInfo = '';
+                if (isReturn && returnSegments && returnSegments.length > 0) {
+                    const returnFirstSeg = returnSegments[0]?.segment;
+                    const returnLastSeg = returnSegments[returnSegments.length - 1]?.segment;
+                    
+                    if (returnFirstSeg && returnLastSeg) {
+                        const returnDep = returnFirstSeg.source?.localTime
+                            ? new Date(returnFirstSeg.source.localTime).toLocaleString('en-GB', {
+                                weekday: 'short',
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : 'N/A';
+                        
+                        const returnArr = returnLastSeg.destination?.localTime
+                            ? new Date(returnLastSeg.destination.localTime).toLocaleString('en-GB', {
+                                weekday: 'short',
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : 'N/A';
+                        
+                        const returnStops = returnSegments.length - 1;
+                        
+                        returnInfo = `
+                            <div style="border-top: 2px solid #e1e4e8; margin-top: 15px; padding-top: 15px;">
+                                <div style="font-weight: 600; color: #667eea; margin-bottom: 10px;">🔄 Return Flight</div>
+                                <div class="flight-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Departure</span>
+                                        <span class="detail-value">${returnDep}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Arrival</span>
+                                        <span class="detail-value">${returnArr}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Stops</span>
+                                        <span class="detail-value">${returnStops === 0 ? 'Direct ✈️' : `${returnStops} stop${returnStops > 1 ? 's' : ''}`}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
                 
                 // Get booking link
                 const bookingLink = flight.bookingOptions?.edges?.[0]?.url || '';
@@ -586,9 +646,10 @@
                 html += `
                     <div class="flight-card">
                         <div class="flight-header">
-                            <div class="route">${origin} → ${destination}</div>
+                            <div class="route">${origin} → ${destination}${isReturn ? ' (Return)' : ''}</div>
                             <div class="price">${price}</div>
                         </div>
+                        <div style="font-weight: 600; color: #667eea; margin-bottom: 10px;">✈️ Outbound Flight</div>
                         <div class="flight-details">
                             <div class="detail-item">
                                 <span class="detail-label">Departure</span>
@@ -611,6 +672,7 @@
                                 <span class="detail-value">${carriers}</span>
                             </div>
                         </div>
+                        ${returnInfo}
                         ${bookingLink ? `<a href="${bookingLink}" target="_blank" class="book-button">Book Now →</a>` : ''}
                     </div>
                 `;
