@@ -292,11 +292,96 @@
         <div class="form-row">
             <div class="form-group">
                 <label for="tripType">Trip Type:</label>
-                <select id="tripType" onchange="toggleReturnDate()">
+                <select id="tripType" onchange="toggleReturnOptions()">
                     <option value="return">Return</option>
                     <option value="oneway">One-way</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label for="dateMode">Date Search Mode:</label>
+                <select id="dateMode" onchange="toggleDateMode()">
+                    <option value="fixed">Fixed Dates</option>
+                    <option value="flexible">Flexible Date Range</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- DEPARTURE AIRPORTS -->
+        <div class="form-group">
+            <label for="from">✈️ Departure Airport(s) <span style="font-size: 12px; color: #666;">(comma-separated for multiple, e.g., EDI,GLA,BFS)</span>:</label>
+            <input type="text" id="from" placeholder="e.g., EDI or EDI,GLA,BFS" value="EDI" />
+        </div>
+        
+        <!-- ARRIVAL AIRPORTS -->
+        <div class="form-group">
+            <label for="to">🛬 Arrival Airport(s) <span style="font-size: 12px; color: #666;">(comma-separated for multiple, e.g., FAO,LIS,OPO)</span>:</label>
+            <input type="text" id="to" placeholder="e.g., FAO or FAO,LIS,OPO,AGP" value="FAO" />
+        </div>
+        
+        <!-- FIXED DATES -->
+        <div id="fixedDates">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="departureDate">📅 Departure Date:</label>
+                    <input type="date" id="departureDate" />
+                </div>
+                <div class="form-group" id="returnDateGroup">
+                    <label for="returnDate">🔄 Return Date:</label>
+                    <input type="date" id="returnDate" />
+                </div>
+            </div>
+        </div>
+        
+        <!-- FLEXIBLE DATES -->
+        <div id="flexibleDates" style="display: none;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="outboundStart">📅 Outbound: Earliest Date:</label>
+                    <input type="date" id="outboundStart" />
+                </div>
+                <div class="form-group">
+                    <label for="outboundEnd">📅 Outbound: Latest Date:</label>
+                    <input type="date" id="outboundEnd" />
+                </div>
+            </div>
+            <div class="form-row" id="returnRangeGroup">
+                <div class="form-group">
+                    <label for="returnStart">🔄 Return: Earliest Date:</label>
+                    <input type="date" id="returnStart" />
+                </div>
+                <div class="form-group">
+                    <label for="returnEnd">🔄 Return: Latest Date:</label>
+                    <input type="date" id="returnEnd" />
+                </div>
+            </div>
+            <div class="form-row" id="stayDurationGroup">
+                <div class="form-group">
+                    <label for="minStay">Minimum Stay (days):</label>
+                    <input type="number" id="minStay" min="1" max="90" value="3" />
+                </div>
+                <div class="form-group">
+                    <label for="maxStay">Maximum Stay (days):</label>
+                    <input type="number" id="maxStay" min="1" max="90" value="7" />
+                </div>
+            </div>
+        </div>
+        
+        <!-- ADVANCED RETURN OPTIONS -->
+        <div id="advancedReturnOptions" class="form-group" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 20px;">
+            <label style="font-weight: 700; color: #667eea; margin-bottom: 10px; display: block;">🔧 Advanced Return Options (Your USP!)</label>
+            <div style="display: grid; gap: 10px;">
+                <label style="font-weight: normal; display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="returnToDeparture" checked style="margin-right: 8px; width: auto;">
+                    <span>Return flight must END at one of my departure airports</span>
+                </label>
+                <label style="font-weight: normal; display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="returnFromArrival" checked style="margin-right: 8px; width: auto;">
+                    <span>Return flight can START from any arrival airport (enables open-jaw: EDI→FAO, LIS→GLA)</span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-row">
             <div class="form-group">
                 <label for="stops">Maximum Stops:</label>
                 <select id="stops">
@@ -305,31 +390,6 @@
                     <option value="2" selected>Up to 2 stops</option>
                 </select>
             </div>
-        </div>
-        
-        <div class="form-row">
-            <div class="form-group">
-                <label for="from">✈️ From (Airport Code):</label>
-                <input type="text" id="from" placeholder="e.g., EDI" value="EDI" maxlength="3" />
-            </div>
-            <div class="form-group">
-                <label for="to">🛬 To (Airport Code):</label>
-                <input type="text" id="to" placeholder="e.g., LGW" value="LGW" maxlength="3" />
-            </div>
-        </div>
-        
-        <div class="form-row">
-            <div class="form-group">
-                <label for="departureDate">📅 Departure Date:</label>
-                <input type="date" id="departureDate" />
-            </div>
-            <div class="form-group" id="returnDateGroup">
-                <label for="returnDate">🔄 Return Date:</label>
-                <input type="date" id="returnDate" />
-            </div>
-        </div>
-        
-        <div class="form-row">
             <div class="form-group">
                 <label for="adults">👥 Adults:</label>
                 <select id="adults">
@@ -339,6 +399,9 @@
                     <option value="4">4 Adults</option>
                 </select>
             </div>
+        </div>
+        
+        <div class="form-row">
             <div class="form-group">
                 <label for="cabinClass">💺 Cabin Class:</label>
                 <select id="cabinClass">
@@ -346,6 +409,14 @@
                     <option value="PREMIUM_ECONOMY">Premium Economy</option>
                     <option value="BUSINESS">Business</option>
                     <option value="FIRST_CLASS">First Class</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sortBy">Sort Results By:</label>
+                <select id="sortBy">
+                    <option value="PRICE" selected>Cheapest First</option>
+                    <option value="DURATION">Fastest First</option>
+                    <option value="QUALITY">Best Overall</option>
                 </select>
             </div>
         </div>
@@ -386,6 +457,10 @@
         // Set default dates
         const departureDateInput = document.getElementById('departureDate');
         const returnDateInput = document.getElementById('returnDate');
+        const outboundStartInput = document.getElementById('outboundStart');
+        const outboundEndInput = document.getElementById('outboundEnd');
+        const returnStartInput = document.getElementById('returnStart');
+        const returnEndInput = document.getElementById('returnEnd');
         const today = new Date();
         
         // Default departure: 14 days from now
@@ -393,6 +468,8 @@
         defaultDeparture.setDate(today.getDate() + 14);
         departureDateInput.value = defaultDeparture.toISOString().split('T')[0];
         departureDateInput.min = today.toISOString().split('T')[0];
+        outboundStartInput.value = defaultDeparture.toISOString().split('T')[0];
+        outboundStartInput.min = today.toISOString().split('T')[0];
         
         // Default return: 7 days after departure
         const defaultReturn = new Date(defaultDeparture);
@@ -400,46 +477,175 @@
         returnDateInput.value = defaultReturn.toISOString().split('T')[0];
         returnDateInput.min = today.toISOString().split('T')[0];
         
+        // Flexible date defaults
+        const outboundEndDefault = new Date(defaultDeparture);
+        outboundEndDefault.setDate(defaultDeparture.getDate() + 3);
+        outboundEndInput.value = outboundEndDefault.toISOString().split('T')[0];
+        outboundEndInput.min = today.toISOString().split('T')[0];
+        
+        returnStartInput.value = defaultReturn.toISOString().split('T')[0];
+        returnStartInput.min = today.toISOString().split('T')[0];
+        
+        const returnEndDefault = new Date(defaultReturn);
+        returnEndDefault.setDate(defaultReturn.getDate() + 3);
+        returnEndInput.value = returnEndDefault.toISOString().split('T')[0];
+        returnEndInput.min = today.toISOString().split('T')[0];
+        
         // Update return date min when departure changes
         departureDateInput.addEventListener('change', () => {
             returnDateInput.min = departureDateInput.value;
         });
         
-        function toggleReturnDate() {
+        function toggleDateMode() {
+            const dateMode = document.getElementById('dateMode').value;
+            const fixedDates = document.getElementById('fixedDates');
+            const flexibleDates = document.getElementById('flexibleDates');
+            
+            if (dateMode === 'flexible') {
+                fixedDates.style.display = 'none';
+                flexibleDates.style.display = 'block';
+            } else {
+                fixedDates.style.display = 'block';
+                flexibleDates.style.display = 'none';
+            }
+        }
+        
+        function toggleReturnOptions() {
             const tripType = document.getElementById('tripType').value;
             const returnDateGroup = document.getElementById('returnDateGroup');
-            returnDateGroup.style.display = tripType === 'oneway' ? 'none' : 'block';
+            const returnRangeGroup = document.getElementById('returnRangeGroup');
+            const stayDurationGroup = document.getElementById('stayDurationGroup');
+            const advancedReturnOptions = document.getElementById('advancedReturnOptions');
+            
+            if (tripType === 'oneway') {
+                returnDateGroup.style.display = 'none';
+                returnRangeGroup.style.display = 'none';
+                stayDurationGroup.style.display = 'none';
+                advancedReturnOptions.style.display = 'none';
+            } else {
+                returnDateGroup.style.display = 'block';
+                returnRangeGroup.style.display = 'grid';
+                stayDurationGroup.style.display = 'grid';
+                advancedReturnOptions.style.display = 'block';
+            }
         }
         
         async function searchFlights() {
-            const from = document.getElementById('from').value.trim().toUpperCase();
-            const to = document.getElementById('to').value.trim().toUpperCase();
-            const departureDate = document.getElementById('departureDate').value;
-            const returnDate = document.getElementById('returnDate').value;
+            // Get all form values
+            const fromInput = document.getElementById('from').value.trim().toUpperCase();
+            const toInput = document.getElementById('to').value.trim().toUpperCase();
             const tripType = document.getElementById('tripType').value;
+            const dateMode = document.getElementById('dateMode').value;
             const adults = document.getElementById('adults').value;
             const stops = document.getElementById('stops').value;
             const cabinClass = document.getElementById('cabinClass').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            // Parse multiple airports
+            const fromAirports = fromInput.split(',').map(a => a.trim()).filter(Boolean);
+            const toAirports = toInput.split(',').map(a => a.trim()).filter(Boolean);
             
             // Validation
-            if (!from || !to) {
-                alert('⚠️ Please enter both departure and arrival airports!');
+            if (fromAirports.length === 0 || toAirports.length === 0) {
+                alert('⚠️ Please enter at least one departure and arrival airport!');
                 return;
             }
             
-            if (from.length !== 3 || to.length !== 3) {
-                alert('⚠️ Airport codes must be 3 letters (e.g., EDI, LGW)');
+            // Validate airport codes (3 letters each)
+            const invalidAirports = [...fromAirports, ...toAirports].filter(code => code.length !== 3);
+            if (invalidAirports.length > 0) {
+                alert(`⚠️ Invalid airport codes: ${invalidAirports.join(', ')}\nAirport codes must be exactly 3 letters (e.g., EDI, FAO)`);
                 return;
             }
             
-            if (!departureDate) {
-                alert('⚠️ Please select a departure date!');
-                return;
+            // Get dates based on mode
+            let searchCombinations = [];
+            
+            if (dateMode === 'fixed') {
+                const departureDate = document.getElementById('departureDate').value;
+                const returnDate = document.getElementById('returnDate').value;
+                
+                if (!departureDate) {
+                    alert('⚠️ Please select a departure date!');
+                    return;
+                }
+                
+                if (tripType === 'return' && !returnDate) {
+                    alert('⚠️ Please select a return date!');
+                    return;
+                }
+                
+                // Create all airport combinations with fixed dates
+                fromAirports.forEach(from => {
+                    toAirports.forEach(to => {
+                        searchCombinations.push({
+                            from,
+                            to,
+                            departureDate,
+                            returnDate: tripType === 'return' ? returnDate : null
+                        });
+                    });
+                });
+                
+            } else {
+                // Flexible dates mode
+                const outboundStart = document.getElementById('outboundStart').value;
+                const outboundEnd = document.getElementById('outboundEnd').value;
+                const returnStart = document.getElementById('returnStart').value;
+                const returnEnd = document.getElementById('returnEnd').value;
+                const minStay = parseInt(document.getElementById('minStay').value);
+                const maxStay = parseInt(document.getElementById('maxStay').value);
+                
+                if (!outboundStart || !outboundEnd) {
+                    alert('⚠️ Please select outbound date range!');
+                    return;
+                }
+                
+                if (tripType === 'return' && (!returnStart || !returnEnd)) {
+                    alert('⚠️ Please select return date range!');
+                    return;
+                }
+                
+                // Generate date combinations
+                const outboundDates = generateDateRange(outboundStart, outboundEnd);
+                const returnDates = tripType === 'return' ? generateDateRange(returnStart, returnEnd) : [null];
+                
+                // Create all combinations
+                fromAirports.forEach(from => {
+                    toAirports.forEach(to => {
+                        outboundDates.forEach(depDate => {
+                            if (tripType === 'return') {
+                                returnDates.forEach(retDate => {
+                                    // Check stay duration
+                                    const daysBetween = Math.floor((new Date(retDate) - new Date(depDate)) / (1000 * 60 * 60 * 24));
+                                    if (daysBetween >= minStay && daysBetween <= maxStay) {
+                                        searchCombinations.push({
+                                            from,
+                                            to,
+                                            departureDate: depDate,
+                                            returnDate: retDate
+                                        });
+                                    }
+                                });
+                            } else {
+                                searchCombinations.push({
+                                    from,
+                                    to,
+                                    departureDate: depDate,
+                                    returnDate: null
+                                });
+                            }
+                        });
+                    });
+                });
             }
             
-            if (tripType === 'return' && !returnDate) {
-                alert('⚠️ Please select a return date!');
-                return;
+            const totalSearches = searchCombinations.length;
+            
+            // Warning if too many searches
+            if (totalSearches > 20) {
+                const confirmed = confirm(`⚠️ This will use ${totalSearches} API requests!\n\nYou have limited requests. Continue?\n\nTip: Reduce the number of airports or narrow the date range.`);
+                if (!confirmed) return;
             }
             
             // Show loading
@@ -448,53 +654,145 @@
             resultsDiv.innerHTML = `
                 <div class="loading">
                     <div class="spinner"></div>
-                    <p>Searching for flights from ${from} to ${to}...</p>
-                    <p style="font-size: 12px; color: #999; margin-top: 10px;">This will use 1 API request</p>
+                    <p>Searching ${totalSearches} flight combination(s)...</p>
+                    <p style="font-size: 12px; color: #999; margin-top: 10px;">This will use ${totalSearches} API request(s)</p>
                 </div>
             `;
             
             // Disable button
             const button = document.querySelector('button');
             button.disabled = true;
-            button.textContent = '⏳ Searching...';
+            button.textContent = `⏳ Searching ${totalSearches} combinations...`;
             
             try {
-                const backendUrl = window.location.origin;
-                const params = new URLSearchParams({
-                    from,
-                    to,
-                    departureDate,
-                    tripType,
-                    adults,
-                    stops,
-                    cabinClass
+                // Execute all searches
+                const allResults = [];
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (let i = 0; i < searchCombinations.length; i++) {
+                    const combo = searchCombinations[i];
+                    
+                    try {
+                        const result = await searchSingleRoute(combo, tripType, adults, stops, cabinClass, sortBy);
+                        if (result && result.data && result.data.data && result.data.data.itineraries) {
+                            allResults.push(...result.data.data.itineraries.map(flight => ({
+                                ...flight,
+                                _searchCombo: combo
+                            })));
+                            successCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error searching ${combo.from} → ${combo.to}:`, error);
+                        errorCount++;
+                    }
+                    
+                    // Update progress
+                    resultsDiv.innerHTML = `
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Searching combination ${i + 1} of ${totalSearches}...</p>
+                            <p style="font-size: 12px; color: #999; margin-top: 10px;">Found ${allResults.length} flights so far</p>
+                        </div>
+                    `;
+                }
+                
+                // Sort all results by price
+                allResults.sort((a, b) => {
+                    const priceA = parseFloat(a.price?.amount || 999999);
+                    const priceB = parseFloat(b.price?.amount || 999999);
+                    return priceA - priceB;
                 });
                 
-                if (tripType === 'return') {
-                    params.append('returnDate', returnDate);
-                }
-                
-                const response = await fetch(`${backendUrl}/api/search-flights?${params}`);
-                const result = await response.json();
-                
-                if (!response.ok || !result.success) {
-                    throw new Error(result.error || 'Failed to fetch flights');
-                }
-                
                 // Update request counter
-                if (result.meta) {
-                    updateCounter(result.meta.requestCount, result.meta.requestsRemaining);
-                }
+                loadRequestCount();
                 
-                displayResults(result.data);
+                // Display combined results
+                if (allResults.length > 0) {
+                    displayCombinedResults(allResults, totalSearches, successCount, errorCount);
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="no-results">
+                            <h2>😕 No Flights Found</h2>
+                            <p>Searched ${totalSearches} combinations but found no results.</p>
+                            <p style="margin-top: 10px;">Try adjusting dates, airports, or increasing maximum stops.</p>
+                        </div>
+                    `;
+                }
                 
             } catch (error) {
                 displayError(error.message);
             } finally {
                 button.disabled = false;
                 button.textContent = '🔍 Search Flights';
-                loadRequestCount(); // Refresh counter
             }
+        }
+        
+        function generateDateRange(startDate, endDate) {
+            const dates = [];
+            const current = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (current <= end) {
+                dates.push(current.toISOString().split('T')[0]);
+                current.setDate(current.getDate() + 1);
+            }
+            
+            return dates;
+        }
+        
+        async function searchSingleRoute(combo, tripType, adults, stops, cabinClass, sortBy) {
+            const backendUrl = window.location.origin;
+            const params = new URLSearchParams({
+                from: combo.from,
+                to: combo.to,
+                departureDate: combo.departureDate,
+                tripType,
+                adults,
+                stops,
+                cabinClass,
+                sort: sortBy
+            });
+            
+            if (combo.returnDate) {
+                params.append('returnDate', combo.returnDate);
+            }
+            
+            const response = await fetch(`${backendUrl}/api/search-flights?${params}`);
+            const result = await response.json();
+            
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'API request failed');
+            }
+            
+            return result;
+        }
+        
+        function displayCombinedResults(allResults, totalSearches, successCount, errorCount) {
+            const resultsDiv = document.getElementById('results');
+            const flights = allResults.slice(0, 50); // Show top 50 cheapest
+            
+            let html = `
+                <div style="background: #e7f3ff; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <strong>Search Summary:</strong><br>
+                    ✅ Searched ${totalSearches} route/date combinations<br>
+                    ✈️ Found ${allResults.length} total flights<br>
+                    💰 Showing ${flights.length} cheapest options below
+                    ${errorCount > 0 ? `<br>⚠️ ${errorCount} search(es) failed` : ''}
+                </div>
+                <h2>✈️ Top ${flights.length} Cheapest Flights</h2>
+            `;
+            
+            // Reuse existing flight card rendering
+            html += '<div id="flightsList">';
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            resultsDiv.innerHTML = '';
+            resultsDiv.appendChild(tempDiv);
+            
+            // Create a temporary container with the flight data
+            const flightData = { data: { itineraries: flights } };
+            displayResults(flightData);
         }
         
         function displayResults(data) {
@@ -617,6 +915,12 @@
                             : 'N/A';
                         
                         const returnStops = returnSegments.length - 1;
+                        const returnCarriers = [...new Set(returnSegments.map(s => s.segment?.carrier?.name).filter(Boolean))].join(', ') || 'Various';
+                        
+                        const returnDurationSeconds = flight.inbound?.duration || 0;
+                        const returnHours = Math.floor(returnDurationSeconds / 3600);
+                        const returnMinutes = Math.floor((returnDurationSeconds % 3600) / 60);
+                        const returnDuration = `${returnHours}h ${returnMinutes}m`;
                         
                         returnInfo = `
                             <div style="border-top: 2px solid #e1e4e8; margin-top: 15px; padding-top: 15px;">
@@ -631,8 +935,16 @@
                                         <span class="detail-value">${returnArr}</span>
                                     </div>
                                     <div class="detail-item">
+                                        <span class="detail-label">Duration</span>
+                                        <span class="detail-value">${returnDuration}</span>
+                                    </div>
+                                    <div class="detail-item">
                                         <span class="detail-label">Stops</span>
                                         <span class="detail-value">${returnStops === 0 ? 'Direct ✈️' : `${returnStops} stop${returnStops > 1 ? 's' : ''}`}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Airline</span>
+                                        <span class="detail-value">${returnCarriers}</span>
                                     </div>
                                 </div>
                             </div>
