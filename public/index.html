@@ -535,16 +535,21 @@
                 }
                 
                 // Get first and last segment
-                const firstSegment = segments[0];
-                const lastSegment = segments[segments.length - 1];
+                const firstSegment = segments[0]?.segment;
+                const lastSegment = segments[segments.length - 1]?.segment;
                 
-                // Extract origin/destination
-                const origin = firstSegment.origin?.city || firstSegment.origin?.name || 'N/A';
-                const destination = lastSegment.destination?.city || lastSegment.destination?.name || 'N/A';
+                if (!firstSegment || !lastSegment) {
+                    console.warn('Segment data missing:', segments);
+                    return;
+                }
+                
+                // Extract origin/destination from station data
+                const origin = firstSegment.source?.station?.code || firstSegment.source?.station?.name || 'N/A';
+                const destination = lastSegment.destination?.station?.code || lastSegment.destination?.station?.name || 'N/A';
                 
                 // Extract times
-                const departure = firstSegment.departure?.localTime 
-                    ? new Date(firstSegment.departure.localTime).toLocaleString('en-GB', {
+                const departure = firstSegment.source?.localTime
+                    ? new Date(firstSegment.source.localTime).toLocaleString('en-GB', {
                         weekday: 'short',
                         day: 'numeric',
                         month: 'short',
@@ -553,8 +558,8 @@
                       })
                     : 'N/A';
                     
-                const arrival = lastSegment.arrival?.localTime
-                    ? new Date(lastSegment.arrival.localTime).toLocaleString('en-GB', {
+                const arrival = lastSegment.destination?.localTime
+                    ? new Date(lastSegment.destination.localTime).toLocaleString('en-GB', {
                         weekday: 'short',
                         day: 'numeric',
                         month: 'short',
@@ -567,7 +572,7 @@
                 const stops = segments.length - 1;
                 
                 // Get carriers
-                const carriers = [...new Set(segments.map(s => s.carrier?.name).filter(Boolean))].join(', ') || 'Various';
+                const carriers = [...new Set(segments.map(s => s.segment?.carrier?.name).filter(Boolean))].join(', ') || 'Various';
                 
                 // Calculate duration
                 const durationSeconds = flight.duration || 0;
