@@ -14,43 +14,10 @@ app.use(express.static('public'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Flight search backend is running!' });
+  res.json({ status: 'OK', message: 'Flight search backend is running (Kiwi.com API)!' });
 });
 
-// Helper function to get entityId for an airport code
-async function getEntityId(airportCode, apiKey) {
-  const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${airportCode}&locale=en-US`;
-  
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
-      'x-rapidapi-key': apiKey
-    }
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok || !data.status || !data.data || data.data.length === 0) {
-    throw new Error(`Could not find airport: ${airportCode}`);
-  }
-
-  // Prefer airports over cities - look for entityType "AIRPORT"
-  const airportResult = data.data.find(item => 
-    item.navigation.entityType === 'AIRPORT'
-  );
-  
-  const airport = airportResult || data.data[0];
-  
-  return {
-    skyId: airport.skyId,
-    entityId: airport.entityId,
-    name: airport.presentation.title,
-    type: airport.navigation.entityType
-  };
-}
-
-// Search flights endpoint
+// Search flights endpoint using Kiwi.com API
 app.get('/api/search-flights', async (req, res) => {
   try {
     // Get parameters from query string
@@ -60,10 +27,7 @@ app.get('/api/search-flights', async (req, res) => {
       date,
       returnDate,
       adults = '1',
-      cabinClass = 'economy',
-      currency = 'GBP',
-      market = 'en-GB',
-      countryCode = 'UK'
+      currency = 'GBP'
     } = req.query;
 
     // Validate required parameters
@@ -74,39 +38,48 @@ app.get('/api/search-flights', async (req, res) => {
       });
     }
 
-    // Get API key from environment variable
-    const apiKey = process.env.RAPIDAPI_KEY;
+    // Get API key from environment variable (defaults to "picky" test key)
+    const apiKey = process.env.KIWI_API_KEY || 'picky';
     
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured',
-        message: 'Please set RAPIDAPI_KEY environment variable in Render'
-      });
+    console.log(`Searching flights: ${from} -> ${to} on ${date}`);
+    console.log(`Using API key: ${apiKey === 'picky' ? 'picky (test key)' : 'custom key'}`);
+
+    // Format date for Kiwi API (they want DD/MM/YYYY)
+    const formatDate = (dateStr) => {
+      const d = new Date(dateStr);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    // Build the Kiwi.com API URL
+    const baseUrl = 'https://api.tequila.kiwi.com/v2/search';
+    const params = new URLSearchParams({
+      fly_from: from,
+      fly_to: to,
+      date_from: formatDate(date),
+      date_to: formatDate(date),
+      adults: adults,
+      curr: currency,
+      limit: 20, // Get top 20 results
+      sort: 'price'
+    });
+
+    // Add return date if provided
+    if (returnDate) {
+      params.append('return_from', formatDate(returnDate));
+      params.append('return_to', formatDate(returnDate));
     }
 
-    console.log(`Searching flights: ${from} -> ${to} on ${date}`);
+    const url = `${baseUrl}?${params}`;
+    console.log('Calling Kiwi API...');
 
-    // Step 1: Look up entityIds for both airports
-    console.log('Looking up airport entityIds...');
-    const [fromAirport, toAirport] = await Promise.all([
-      getEntityId(from, apiKey),
-      getEntityId(to, apiKey)
-    ]);
-
-    console.log(`From: ${fromAirport.name} (${fromAirport.skyId}, entityId: ${fromAirport.entityId})`);
-    console.log(`To: ${toAirport.name} (${toAirport.skyId}, entityId: ${toAirport.entityId})`);
-
-    // Step 2: Build the flight search URL with correct entityIds
-    const url = `https://sky-scrapper.p.rapidapi.com/api/v2/flights/searchFlights?originSkyId=${fromAirport.skyId}&destinationSkyId=${toAirport.skyId}&originEntityId=${fromAirport.entityId}&destinationEntityId=${toAirport.entityId}&date=${date}${returnDate ? `&returnDate=${returnDate}` : ''}&cabinClass=${cabinClass}&adults=${adults}&sortBy=best&currency=${currency}&market=${market}&countryCode=${countryCode}`;
-
-    console.log('Searching flights...');
-
-    // Step 3: Make the API request
+    // Make the API request
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
-        'x-rapidapi-key': apiKey
+        'apikey': apiKey
       }
     });
 
@@ -114,24 +87,22 @@ app.get('/api/search-flights', async (req, res) => {
 
     // Check if API returned an error
     if (!response.ok) {
-      console.error('API Error:', data);
+      console.error('API Error:', response.status, data);
       return res.status(response.status).json({
         error: 'API request failed',
         details: data,
-        status: response.status
+        status: response.status,
+        message: response.status === 401 ? 'API key invalid or expired' : data.message || 'Unknown error'
       });
     }
 
-    console.log(`Success! Found ${data.data?.itineraries?.length || 0} flights`);
+    console.log(`Success! Found ${data.data?.length || 0} flights`);
 
     // Return the flight data
     res.json({
       success: true,
       data: data,
-      airports: {
-        from: fromAirport,
-        to: toAirport
-      }
+      resultCount: data.data?.length || 0
     });
 
   } catch (error) {
@@ -143,7 +114,7 @@ app.get('/api/search-flights', async (req, res) => {
   }
 });
 
-// Search for airport/city codes (helper endpoint for future use)
+// Search for airport/city codes
 app.get('/api/search-location', async (req, res) => {
   try {
     const { query } = req.query;
@@ -154,21 +125,14 @@ app.get('/api/search-location', async (req, res) => {
       });
     }
 
-    const apiKey = process.env.RAPIDAPI_KEY;
-    
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured'
-      });
-    }
+    const apiKey = process.env.KIWI_API_KEY || 'picky';
 
-    const url = `https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchAirport?query=${encodeURIComponent(query)}&locale=en-US`;
+    const url = `https://api.tequila.kiwi.com/locations/query?term=${encodeURIComponent(query)}&locale=en-US&location_types=airport&limit=10`;
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'x-rapidapi-host': 'sky-scrapper.p.rapidapi.com',
-        'x-rapidapi-key': apiKey
+        'apikey': apiKey
       }
     });
 
@@ -198,6 +162,6 @@ app.get('/api/search-location', async (req, res) => {
 // Start the server
 app.listen(PORT, () => {
   console.log(`✈️  Flight Search Backend running on port ${PORT}`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔑 API Key configured: ${process.env.RAPIDAPI_KEY ? 'Yes' : 'No'}`);
+  console.log(`🔧 Using Kiwi.com API`);
+  console.log(`🔑 API Key: ${process.env.KIWI_API_KEY ? 'Custom key configured' : 'Using "picky" test key'}`);
 });
