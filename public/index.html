@@ -378,8 +378,8 @@
         function displayResults(data) {
             const resultsDiv = document.getElementById('results');
             
-            // Check if we have itineraries
-            if (!data.data || !data.data.itineraries || data.data.itineraries.length === 0) {
+            // Check if we have flights (Kiwi.com uses data.data array)
+            if (!data.data || !data.data.data || data.data.data.length === 0) {
                 resultsDiv.innerHTML = `
                     <div class="no-results">
                         <h2>😕 No Flights Found</h2>
@@ -389,27 +389,53 @@
                 return;
             }
             
-            const flights = data.data.itineraries;
+            const flights = data.data.data;
             
             let html = `<h2>✈️ Found ${flights.length} Flights</h2>`;
             
             // Display first 10 flights
             flights.slice(0, 10).forEach((flight, index) => {
-                const price = flight.price?.formatted || 'N/A';
-                const legs = flight.legs || [];
+                // Kiwi.com data structure
+                const price = flight.conversion ? `£${flight.conversion.GBP}` : `€${flight.price}`;
+                const route = flight.route || [];
                 
-                // Get first and last leg for route info
-                const firstLeg = legs[0];
-                const lastLeg = legs[legs.length - 1];
+                if (route.length === 0) return;
                 
-                if (!firstLeg || !lastLeg) return;
+                // Get first and last segment
+                const firstSeg = route[0];
+                const lastSeg = route[route.length - 1];
                 
-                const origin = firstLeg.origin?.displayCode || 'N/A';
-                const destination = lastLeg.destination?.displayCode || 'N/A';
-                const departure = firstLeg.departure ? new Date(firstLeg.departure).toLocaleString() : 'N/A';
-                const arrival = lastLeg.arrival ? new Date(lastLeg.arrival).toLocaleString() : 'N/A';
-                const stops = firstLeg.stopCount || 0;
-                const carriers = firstLeg.carriers?.marketing?.[0]?.name || 'Various';
+                const origin = firstSeg.flyFrom || 'N/A';
+                const destination = lastSeg.flyTo || 'N/A';
+                const departure = new Date(firstSeg.local_departure).toLocaleString('en-GB', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const arrival = new Date(lastSeg.local_arrival).toLocaleString('en-GB', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                // Calculate duration
+                const durationMins = Math.floor((new Date(lastSeg.local_arrival) - new Date(firstSeg.local_departure)) / 60000);
+                const hours = Math.floor(durationMins / 60);
+                const mins = durationMins % 60;
+                const duration = `${hours}h ${mins}m`;
+                
+                // Get airline names
+                const airlines = [...new Set(route.map(r => r.airline))].join(', ');
+                
+                // Count stops (total segments - 1)
+                const stops = route.length - 1;
+                
+                // Booking link
+                const bookingLink = flight.deep_link;
                 
                 html += `
                     <div class="flight-card">
@@ -427,13 +453,24 @@
                                 <span class="detail-value">${arrival}</span>
                             </div>
                             <div class="detail-item">
+                                <span class="detail-label">Duration</span>
+                                <span class="detail-value">${duration}</span>
+                            </div>
+                            <div class="detail-item">
                                 <span class="detail-label">Stops</span>
                                 <span class="detail-value">${stops === 0 ? 'Direct' : `${stops} stop${stops > 1 ? 's' : ''}`}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Airline</span>
-                                <span class="detail-value">${carriers}</span>
+                                <span class="detail-value">${airlines}</span>
                             </div>
+                            ${bookingLink ? `
+                            <div class="detail-item">
+                                <a href="${bookingLink}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 600;">
+                                    🔗 Book Now →
+                                </a>
+                            </div>
+                            ` : ''}
                         </div>
                     </div>
                 `;
