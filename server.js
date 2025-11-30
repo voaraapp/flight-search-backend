@@ -35,12 +35,18 @@ async function getEntityId(airportCode, apiKey) {
     throw new Error(`Could not find airport: ${airportCode}`);
   }
 
-  // Return the first matching airport's details
-  const airport = data.data[0];
+  // Prefer airports over cities - look for entityType "AIRPORT"
+  const airportResult = data.data.find(item => 
+    item.navigation.entityType === 'AIRPORT'
+  );
+  
+  const airport = airportResult || data.data[0];
+  
   return {
     skyId: airport.skyId,
     entityId: airport.entityId,
-    name: airport.presentation.title
+    name: airport.presentation.title,
+    type: airport.navigation.entityType
   };
 }
 
