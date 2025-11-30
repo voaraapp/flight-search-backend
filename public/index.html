@@ -500,17 +500,25 @@
         function displayResults(data) {
             const resultsDiv = document.getElementById('results');
             
+            // Debug: log the data structure
+            console.log('Full API response:', data);
+            
             if (!data.data || !data.data.itineraries || data.data.itineraries.length === 0) {
                 resultsDiv.innerHTML = `
                     <div class="no-results">
                         <h2>😕 No Flights Found</h2>
                         <p>Try adjusting your search dates, airports, or increase maximum stops.</p>
+                        <details style="margin-top: 20px;">
+                            <summary style="cursor: pointer;">Show raw data</summary>
+                            <pre style="text-align: left; font-size: 11px; overflow: auto; max-height: 300px;">${JSON.stringify(data, null, 2)}</pre>
+                        </details>
                     </div>
                 `;
                 return;
             }
             
             const flights = data.data.itineraries;
+            console.log('First flight object:', flights[0]);
             
             let html = `<h2>✈️ Found ${flights.length} Flights</h2>`;
             
