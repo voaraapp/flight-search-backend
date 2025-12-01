@@ -1,210 +1,115 @@
-const express = require('express');
-const cors = require('cors');
-const fetch = require('node-fetch');
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Request counter (resets when server restarts)
-let requestCount = 0;
-
-// Enable CORS for all origins
 app.use(cors());
 app.use(express.json());
 
-// Serve the HTML page
-app.use(express.static('public'));
+const API_URL = "https://flights-scraper-real-time.p.rapidapi.com/v2/flight/round-trip";
+const API_KEY = process.env.RAPIDAPI_KEY;
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Flight search backend is running!',
-    apiRequestCount: requestCount,
-    apiLimit: 150
-  });
-});
-
-// Get request count
-app.get('/api/request-count', (req, res) => {
-  res.json({
-    count: requestCount,
-    limit: 150,
-    remaining: 150 - requestCount
-  });
-});
-
-// Airport autocomplete endpoint
-app.get('/api/autocomplete', async (req, res) => {
+// --- Existing Single Route (DO NOT DELETE) ---
+app.post("/api/search", async (req, res) => {
   try {
-    const { query } = req.query;
-    
-    if (!query) {
-      return res.status(400).json({
-        error: 'Missing query parameter'
-      });
-    }
+    const { from, to, departureDate, returnDate, adults = 1, currency = "GBP" } = req.body;
 
-    const apiKey = process.env.RAPIDAPI_KEY;
-    
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured',
-        message: 'Please set RAPIDAPI_KEY environment variable in Render'
-      });
-    }
+    const url = new URL(API_URL);
+    url.searchParams.append("fromId", `${from}-sky`);
+    url.searchParams.append("toId", `${to}-sky`);
+    url.searchParams.append("date", departureDate);
+    url.searchParams.append("returnDate", returnDate);
+    url.searchParams.append("selectedCabins", "ECONOMY");
+    url.searchParams.append("adult", adults);
+    url.searchParams.append("currency", currency);
 
-    const url = `https://flights-scraper-real-time.p.rapidapi.com/flights/auto-complete?query=${encodeURIComponent(query)}`;
-
-    console.log(`[${++requestCount}/150] Autocomplete: ${query}`);
-
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await fetch(url.toString(), {
+      method: "GET",
       headers: {
-        'x-rapidapi-host': 'flights-scraper-real-time.p.rapidapi.com',
-        'x-rapidapi-key': apiKey
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host": "flights-scraper-real-time.p.rapidapi.com"
       }
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-      console.error('API Error:', data);
-      return res.status(response.status).json({
-        error: 'API request failed',
-        details: data
-      });
-    }
-
-    res.json({
-      success: true,
-      data: data
-    });
+    res.json({ results: formatItineraryResponse(data, from, to) });
 
   } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+    console.error("❌ /api/search ERROR:", error);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// Search flights endpoint
-app.get('/api/search-flights', async (req, res) => {
+// --- NEW Multi-Airport Flexible Search ---
+app.post("/api/search-flex", async (req, res) => {
   try {
-    const {
-      from,
-      to,
-      departureDate,
-      returnDate,
-      tripType = 'return',
-      adults = '1',
-      children = '0',
-      infants = '0',
-      stops = '2',
-      cabinClass = 'ECONOMY',
-      currency = 'GBP',
-      market = 'GB',
-      locale = 'en-GB',
-      sort = 'PRICE'
-    } = req.query;
-
-    // Validate required parameters
-    if (!from || !to || !departureDate) {
-      return res.status(400).json({
-        error: 'Missing required parameters',
-        required: ['from', 'to', 'departureDate']
-      });
+    const { departures, arrivals, departureDate, returnDate, adults = 1, currency = "GBP" } = req.body;
+    if (!departures || !arrivals) {
+      return res.status(400).json({ error: "Missing airports" });
     }
 
-    const apiKey = process.env.RAPIDAPI_KEY;
-    
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured'
-      });
-    }
+    let allResults = [];
 
-    // Choose endpoint based on trip type
-    const endpoint = tripType === 'oneway' 
-      ? '/flights/search-oneway'
-      : '/flights/search-return';
+    for (const dep of departures) {
+      for (const arr of arrivals) {
+        const url = new URL(API_URL);
+        url.searchParams.append("fromId", `${dep}-sky`);
+        url.searchParams.append("toId", `${arr}-sky`);
+        url.searchParams.append("date", departureDate);
+        url.searchParams.append("returnDate", returnDate);
+        url.searchParams.append("selectedCabins", "ECONOMY");
+        url.searchParams.append("adult", adults);
+        url.searchParams.append("currency", currency);
 
-    // Build query parameters
-    const params = new URLSearchParams({
-      originSkyId: from,
-      destinationSkyId: to,
-      departureDate: departureDate,
-      adults: adults,
-      children: children,
-      infants: infants,
-      stops: stops,
-      cabinClass: cabinClass,
-      currency: currency,
-      market: market,
-      locale: locale,
-      sort: sort,
-      limit: '20',
-      allowReturnFromDifferentStationOrAirport: 'true',
-      allowReturnToDifferentStationOrAirport: 'true'
-    });
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": "flights-scraper-real-time.p.rapidapi.com"
+          }
+        });
 
-    // Add return date if it's a return trip
-    if (tripType === 'return' && returnDate) {
-      params.append('returnDate', returnDate);
-    }
-
-    const url = `https://flights-scraper-real-time.p.rapidapi.com${endpoint}?${params}`;
-
-    console.log(`[${++requestCount}/150] Search: ${from} -> ${to} (${departureDate}${returnDate ? ' - ' + returnDate : ''})`);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-host': 'flights-scraper-real-time.p.rapidapi.com',
-        'x-rapidapi-key': apiKey
+        const data = await response.json();
+        const formatted = formatItineraryResponse(data, dep, arr);
+        allResults.push(...formatted);
       }
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('API Error:', data);
-      return res.status(response.status).json({
-        error: 'API request failed',
-        details: data,
-        status: response.status
-      });
     }
 
-    // Count results
-    const resultCount = data.data?.itineraries?.length || 0;
-    console.log(`✅ Found ${resultCount} flights (Request ${requestCount}/150)`);
+    if (allResults.length === 0) return res.json({ results: [] });
 
-    res.json({
-      success: true,
-      data: data,
-      meta: {
-        requestCount: requestCount,
-        requestLimit: 150,
-        requestsRemaining: 150 - requestCount
-      }
-    });
+    allResults.sort((a, b) => a.price - b.price);
+
+    res.json({ results: allResults });
 
   } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+    console.error("❌ /api/search-flex ERROR:", error);
+    return res.status(500).json({ error: "Server Error" });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`✈️  Flight Search Backend running on port ${PORT}`);
-  console.log(`🔧 Using Flights Scraper Real-Time API`);
-  console.log(`🔑 API Key configured: ${process.env.RAPIDAPI_KEY ? 'Yes' : 'No'}`);
-  console.log(`📊 Request counter initialized at: ${requestCount}/150`);
-});
+// ---- Response Formatter ----
+function formatItineraryResponse(data, dep, arr) {
+  if (!data?.data?.itineraries) return [];
+
+  return data.data.itineraries.map(itin => {
+    const outSeg = itin.outbound?.sectorSegments?.[0];
+    const inSeg = itin.inbound?.sectorSegments?.[0];
+    return {
+      from: dep,
+      to: arr,
+      outDeparture: outSeg?.departure ?? null,
+      outArrival: outSeg?.arrival ?? null,
+      returnDeparture: inSeg?.departure ?? null,
+      returnArrival: inSeg?.arrival ?? null,
+      stopsOutbound: outSeg?.stops?.length ?? 0,
+      stopsInbound: inSeg?.stops?.length ?? 0,
+      airline: outSeg?.carrierName ?? "Unknown",
+      price: parseFloat(itin.price?.amount || 0)
+    };
+  });
+}
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Backend running on ${PORT}`));
