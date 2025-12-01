@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -6,21 +5,18 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Request counter (resets when server restarts)
+// Request counter
 let requestCount = 0;
 
-// Enable CORS for all origins
 app.use(cors());
 app.use(express.json());
-
-// Serve the HTML page
 app.use(express.static('public'));
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'Flight search backend is running!',
+    message: 'Flight search backend V2 is running!',
     apiRequestCount: requestCount,
     apiLimit: 150
   });
@@ -35,24 +31,18 @@ app.get('/api/request-count', (req, res) => {
   });
 });
 
-// Airport autocomplete endpoint
+// Airport autocomplete with nearby airports
 app.get('/api/autocomplete', async (req, res) => {
   try {
     const { query } = req.query;
     
     if (!query) {
-      return res.status(400).json({
-        error: 'Missing query parameter'
-      });
+      return res.status(400).json({ error: 'Missing query parameter' });
     }
 
     const apiKey = process.env.RAPIDAPI_KEY;
-    
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured',
-        message: 'Please set RAPIDAPI_KEY environment variable in Render'
-      });
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     const url = `https://flights-scraper-real-time.p.rapidapi.com/flights/auto-complete?query=${encodeURIComponent(query)}`;
@@ -71,27 +61,90 @@ app.get('/api/autocomplete', async (req, res) => {
 
     if (!response.ok) {
       console.error('API Error:', data);
-      return res.status(response.status).json({
-        error: 'API request failed',
-        details: data
-      });
+      return res.status(response.status).json({ error: 'API request failed', details: data });
     }
+
+    res.json({ success: true, data: data });
+
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'Internal server error', message: error.message });
+  }
+});
+
+// Efficient price table endpoint (for flexible date searches)
+app.get('/api/price-table', async (req, res) => {
+  try {
+    const {
+      from,
+      to,
+      departureDate,
+      returnDate,
+      adults = '1',
+      currency = 'GBP',
+      market = 'GB',
+      locale = 'en-GB'
+    } = req.query;
+
+    if (!from || !to) {
+      return res.status(400).json({ error: 'Missing required parameters', required: ['from', 'to'] });
+    }
+
+    const apiKey = process.env.RAPIDAPI_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    const params = new URLSearchParams({
+      originSkyId: from,
+      destinationSkyId: to,
+      adults: adults,
+      currency: currency,
+      locale: locale,
+      market: market
+    });
+
+    if (departureDate) params.append('departureDate', departureDate);
+    if (returnDate) params.append('returnDate', returnDate);
+
+    const url = `https://flights-scraper-real-time.p.rapidapi.com/flights/price-table?${params}`;
+
+    console.log(`[${++requestCount}/150] Price Table: ${from} -> ${to}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-host': 'flights-scraper-real-time.p.rapidapi.com',
+        'x-rapidapi-key': apiKey
+      }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('API Error:', data);
+      return res.status(response.status).json({ error: 'API request failed', details: data, status: response.status });
+    }
+
+    console.log(`✅ Price table retrieved (Request ${requestCount}/150)`);
 
     res.json({
       success: true,
-      data: data
+      data: data,
+      meta: {
+        requestCount: requestCount,
+        requestLimit: 150,
+        requestsRemaining: 150 - requestCount
+      }
     });
 
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+    res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 
-// Search flights endpoint
+// Search flights endpoint (for fixed date searches)
 app.get('/api/search-flights', async (req, res) => {
   try {
     const {
@@ -111,7 +164,6 @@ app.get('/api/search-flights', async (req, res) => {
       sort = 'PRICE'
     } = req.query;
 
-    // Validate required parameters
     if (!from || !to || !departureDate) {
       return res.status(400).json({
         error: 'Missing required parameters',
@@ -120,11 +172,8 @@ app.get('/api/search-flights', async (req, res) => {
     }
 
     const apiKey = process.env.RAPIDAPI_KEY;
-    
     if (!apiKey) {
-      return res.status(500).json({
-        error: 'API key not configured'
-      });
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     // Choose endpoint based on trip type
@@ -132,7 +181,6 @@ app.get('/api/search-flights', async (req, res) => {
       ? '/flights/search-oneway'
       : '/flights/search-return';
 
-    // Build query parameters
     const params = new URLSearchParams({
       originSkyId: from,
       destinationSkyId: to,
@@ -146,12 +194,9 @@ app.get('/api/search-flights', async (req, res) => {
       market: market,
       locale: locale,
       sort: sort,
-      limit: '20',
-      allowReturnFromDifferentStationOrAirport: 'true',
-      allowReturnToDifferentStationOrAirport: 'true'
+      limit: '20'
     });
 
-    // Add return date if it's a return trip
     if (tripType === 'return' && returnDate) {
       params.append('returnDate', returnDate);
     }
@@ -179,7 +224,6 @@ app.get('/api/search-flights', async (req, res) => {
       });
     }
 
-    // Count results
     const resultCount = data.data?.itineraries?.length || 0;
     console.log(`✅ Found ${resultCount} flights (Request ${requestCount}/150)`);
 
@@ -202,10 +246,11 @@ app.get('/api/search-flights', async (req, res) => {
   }
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
-  console.log(`✈️  Flight Search Backend running on port ${PORT}`);
+  console.log(`✈️  Flight Search Backend V2 running on port ${PORT}`);
   console.log(`🔧 Using Flights Scraper Real-Time API`);
   console.log(`🔑 API Key configured: ${process.env.RAPIDAPI_KEY ? 'Yes' : 'No'}`);
-  console.log(`📊 Request counter initialized at: ${requestCount}/150`);
+  console.log(`📊 Request counter: ${requestCount}/150`);
+  console.log(`🚀 New features: Price tables, Open-jaw, Nearby airports`);
 });
